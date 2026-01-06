@@ -1,29 +1,26 @@
 const amqp = require('amqplib');
 
 const queue = 'demo_queue';
-const msg = 'Test';
 
-async function send() {
-  try {
-    // 1. Connect to the RabbitMQ server
-    const connection = await amqp.connect('amqp://localhost'); 
-    const channel = await connection.createChannel();
-
-    // 2. Define the queue (idempotent: creates it if it doesn't exist)
-    await channel.assertQueue(queue, { durable: false });
-
-    // 3. Send the message
-    channel.sendToQueue(queue, Buffer.from(msg));
-    console.log(" [x] Sent '%s'", msg);
-
-    // 4. Close connection and exit
-    setTimeout(() => {
-      connection.close();
-      process.exit(0);
-    }, 500);
-  } catch (error) {
-    console.error("Error:", error);
-  }
+// We wrap the code in a function that accepts the message as an argument
+async function sendMessage(msg) {
+  const connection = await amqp.connect('amqp://localhost');
+  const channel = await connection.createChannel();
+  
+  await channel.assertQueue(queue, { durable: false });
+  channel.sendToQueue(queue, Buffer.from(msg));
+  
+  console.log(" [x] Sent '%s'", msg);
+  
+  setTimeout(() => {
+    connection.close();
+  }, 500);
 }
 
-send();
+// If running this file directly (node send.js), execute the function
+if (require.main === module) {
+    sendMessage('Hello World from Node!');
+}
+
+// Export the function for the test to use
+module.exports = sendMessage;
