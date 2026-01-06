@@ -1,4 +1,4 @@
-name: RabbitMQ Integration Test
+name: RabbitMQ CI/CD Pipeline
 
 on:
   push:
@@ -9,15 +9,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    # 1. This spins up RabbitMQ inside the GitHub runner
     services:
       rabbitmq:
         image: rabbitmq:3-management
         ports:
           - 5672:5672
           - 15672:15672
-        # We wait until RabbitMQ is actually ready to accept connections
         options: >-
           --health-cmd "rabbitmq-diagnostics -q ping"
           --health-interval 10s
@@ -26,15 +23,26 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
     - name: Use Node.js 18
       uses: actions/setup-node@v4
       with:
         node-version: 18
-
     - name: Install Dependencies
       run: npm install
-
-    # 2. This runs your actual test file
     - name: Run Integration Test
       run: npm test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test  
+    if: github.ref == 'refs/heads/main' # Only deploy if we are on the main branch
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Simulate Deployment
+        run: |
+          echo "Test passed! Starting deployment..."
+          echo "Connecting to production server..."
+          echo "Uploading files..."
+          echo "✅ Deployed successfully!"
