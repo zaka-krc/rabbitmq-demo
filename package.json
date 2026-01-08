@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "test": "node test.js"
-},
+    "start": "node receive.js",
+    "test": "node test-connection.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

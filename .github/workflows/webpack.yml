@@ -1,4 +1,4 @@
-name: RabbitMQ CI/CD Pipeline
+name: Salesforce RabbitMQ Integratie CI
 
 on:
   push:
@@ -7,42 +7,34 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test:
+  build-and-test:
     runs-on: ubuntu-latest
+
+    # Hier voegen we een tijdelijke RabbitMQ server toe voor de test!
     services:
       rabbitmq:
-        image: rabbitmq:3-management
+        image: rabbitmq:latest
         ports:
           - 5672:5672
-          - 15672:15672
-        options: >-
-          --health-cmd "rabbitmq-diagnostics -q ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
     - uses: actions/checkout@v4
-    - name: Use Node.js 20
+
+    - name: Gebruik Node.js 20
       uses: actions/setup-node@v4
       with:
-        node-version: 20
-    - name: Install Dependencies
-      run: npm install
-    - name: Run Integration Test
-      run: npm test
+        node-version: '20.x'
+        cache: 'npm'
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: test  
-    if: github.ref == 'refs/heads/main' # Only deploy if we are on the main branch
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Simulate Deployment
-        run: |
-          echo "Test passed! Starting deployment..."
-          echo "Connecting to production server..."
-          echo "Uploading files..."
-          echo "✅ Deployed successfully!"
+    - name: Installeer dependencies
+      run: npm install
+
+    - name: Code Kwaliteit Check (Linting)
+      run: npx eslint . --if-present
+
+    - name: Run Integratie Tests
+      run: npm test --if-present
+      env:
+        # Gebruik GitHub Secrets voor je Salesforce keys!
+        SF_USERNAME: ${{ secrets.SF_USERNAME }}
+        SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
