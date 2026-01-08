@@ -1,15 +1,20 @@
 const amqp = require('amqplib');
 const readline = require('readline');
-
-const exchange = 'demo_exchange';
+const config = require('./config');
 
 // Send a message with a routing key and JSON data
 async function sendMessage(routingKey, data) {
-  const connection = await amqp.connect('amqp://localhost');
+  const connection = await amqp.connect(config.RABBITMQ_URL);
   const channel = await connection.createChannel();
   
-  // Use topic exchange for routing
-  await channel.assertExchange(exchange, 'topic', { durable: false });
+  // Declare durable exchange (survives broker restart)
+  await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
+  
+  // Declare durable queue (survives broker restart)
+  await channel.assertQueue(config.QUEUE_NAME, { durable: true });
+  
+  // Bind queue to exchange with routing pattern
+  await channel.bindQueue(config.QUEUE_NAME, config.EXCHANGE_NAME, 'order.*');
   
   // Create JSON message with metadata
   const message = {
@@ -19,47 +24,54 @@ async function sendMessage(routingKey, data) {
   };
   
   const msgBuffer = Buffer.from(JSON.stringify(message));
-  channel.publish(exchange, routingKey, msgBuffer, { persistent: false });
   
-  console.log(" [x] Sent with routing key [%s]: %s", routingKey, JSON.stringify(data));
+  // Publish with persistent: true (message survives broker restart)
+  channel.publish(config.EXCHANGE_NAME, routingKey, msgBuffer, { persistent: true });
+  
+  console.log("\n [x] Sent order to queue!");
+  console.log("     Routing key: %s", routingKey);
+  console.log("     Data: %s", JSON.stringify(data, null, 2));
   
   setTimeout(() => {
     connection.close();
   }, 500);
 }
 
-// If running this file directly (node send.js), execute the function
-if (require.main === module) {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
+// Interactive order creation
+function createOrder() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
 
-    rl.question('Enter routing key (e.g., order.create, customer.update): ', (routingKey) => {
-        rl.question('Enter message data as JSON (or press Enter for default): ', (dataInput) => {
-            rl.close();
-            
-            let data;
-            if (dataInput.trim()) {
-                try {
-                    data = JSON.parse(dataInput);
-                } catch (e) {
-                    console.log('Invalid JSON, using as text...');
-                    data = { message: dataInput };
-                }
-            } else {
-                data = { 
-                    orderId: '12345', 
-                    product: 'Widget', 
-                    quantity: 10,
-                    customer: 'ACME Corp'
-                };
-            }
-            
-            sendMessage(routingKey.trim(), data);
-        });
+  console.log("\n=== Create New Order ===\n");
+
+  rl.question('Enter order ID: ', (orderId) => {
+    rl.question('Enter customer name: ', (customerName) => {
+      rl.close();
+
+      // Validate inputs
+      if (!orderId.trim() || !customerName.trim()) {
+        console.log('\n❌ Error: Both order ID and customer name are required!');
+        process.exit(1);
+      }
+
+      // Build the order object
+      const order = {
+        orderId: orderId.trim(),
+        customerName: customerName.trim()
+      };
+
+      // Send with routing key 'order.create'
+      sendMessage(config.ROUTING_KEY, order);
     });
+  });
 }
 
-// Export the function for the test to use
+// If running this file directly, start the interactive order creation
+if (require.main === module) {
+  createOrder();
+}
+
+// Export the function for tests
 module.exports = sendMessage;

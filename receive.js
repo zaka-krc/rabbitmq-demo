@@ -1,66 +1,69 @@
 const amqp = require('amqplib');
+const config = require('./config');
 
-const exchange = 'demo_exchange';
-
-// Receive messages matching a routing pattern
-async function startReceiver(routingPattern = '#', onMessageReceived) {
-  const connection = await amqp.connect('amqp://localhost');
+// Receive messages from the orders queue
+async function startReceiver(onMessageReceived) {
+  const connection = await amqp.connect(config.RABBITMQ_URL);
   const channel = await connection.createChannel();
   
-  // Use topic exchange
-  await channel.assertExchange(exchange, 'topic', { durable: false });
+  // Declare durable exchange (survives broker restart)
+  await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
   
-  // Create a temporary exclusive queue (auto-deleted when connection closes)
-  const q = await channel.assertQueue('', { exclusive: true });
+  // Declare durable named queue (survives broker restart)
+  await channel.assertQueue(config.QUEUE_NAME, { durable: true });
   
-  // Bind queue to exchange with routing pattern
-  await channel.bindQueue(q.queue, exchange, routingPattern);
+  // Bind queue to exchange with routing pattern 'order.*'
+  await channel.bindQueue(config.QUEUE_NAME, config.EXCHANGE_NAME, 'order.*');
 
-  console.log(" [*] Waiting for messages matching '%s'... (Press Ctrl+C to exit)", routingPattern);
+  console.log(" [*] Waiting for orders in '%s'... (Press Ctrl+C to exit)", config.QUEUE_NAME);
 
-  channel.consume(q.queue, (msg) => {
+  channel.consume(config.QUEUE_NAME, (msg) => {
     if (msg !== null) {
       const routingKey = msg.fields.routingKey;
       const messageData = JSON.parse(msg.content.toString());
       
-      console.log(" [x] Received [%s]: %s", routingKey, JSON.stringify(messageData.data));
+      console.log("\n [x] Received order:");
+      console.log("     Routing key: %s", routingKey);
+      console.log("     Order ID: %s", messageData.data.orderId);
+      console.log("     Customer: %s", messageData.data.customerName);
+      console.log("     Timestamp: %s", messageData.timestamp);
       
       // If a callback exists (like from our Test), run it!
       if (onMessageReceived) {
-          onMessageReceived(messageData, routingKey);
+        onMessageReceived(messageData, routingKey);
       }
       
-      // Acknowledge the message
+      // Acknowledge the message (tells RabbitMQ we processed it)
       channel.ack(msg);
     }
   }, { noAck: false });
   
-  return connection; // Return connection so the test can close it later
+  return { connection, channel };
 }
 
-// If running directly, listen to all messages automatically
+// If running directly, start listening
 if (require.main === module) {
-    console.log("Starting receiver...");
-    let connection;
-    
-    startReceiver('#')
-        .then(conn => {
-            connection = conn;
-            console.log("Receiver is now active and listening...");
-        })
-        .catch(err => {
-            console.error("Failed to start receiver:", err);
-            process.exit(1);
-        });
-
-    // Gracefully close the connection on exit
-    process.on('SIGINT', () => {
-        console.log("\nClosing RabbitMQ connection...");
-        if (connection) {
-            connection.close();
-        }
-        process.exit(0);
+  console.log("Starting order receiver...");
+  let connection;
+  
+  startReceiver()
+    .then(result => {
+      connection = result.connection;
+      console.log("Receiver is now active and listening...");
+    })
+    .catch(err => {
+      console.error("Failed to start receiver:", err);
+      process.exit(1);
     });
+
+  // Gracefully close the connection on exit
+  process.on('SIGINT', () => {
+    console.log("\nClosing RabbitMQ connection...");
+    if (connection) {
+      connection.close();
+    }
+    process.exit(0);
+  });
 }
 
 module.exports = startReceiver;

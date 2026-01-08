@@ -1,4 +1,5 @@
 const http = require('http');
+const config = require('./config');
 
 // RabbitMQ Management API credentials (default)
 const hostname = 'localhost';
@@ -75,40 +76,77 @@ async function deleteQueue(queueName) {
   });
 }
 
-async function cleanup() {
-  try {
-    console.log('Fetching all queues from RabbitMQ...\n');
+async function deleteExchange(exchangeName) {
+  return new Promise((resolve, reject) => {
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
     
+    const options = {
+      hostname: hostname,
+      port: port,
+      path: `/api/exchanges/${encodeURIComponent(vhost)}/${encodeURIComponent(exchangeName)}`,
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Basic ${auth}`
+      }
+    };
+
+    const req = http.request(options, (res) => {
+      if (res.statusCode === 204 || res.statusCode === 200) {
+        resolve();
+      } else {
+        reject(new Error(`Failed to delete: ${res.statusCode}`));
+      }
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    req.end();
+  });
+}
+
+async function cleanup() {
+  console.log('=== RabbitMQ Cleanup ===\n');
+  
+  try {
+    // 1. Delete our demo queue
+    console.log(`Deleting queue '${config.QUEUE_NAME}'...`);
+    try {
+      await deleteQueue(config.QUEUE_NAME);
+      console.log(`✓ Deleted queue: ${config.QUEUE_NAME}`);
+    } catch (err) {
+      console.log(`⚠ Queue '${config.QUEUE_NAME}' not found or already deleted`);
+    }
+
+    // 2. Delete our demo exchange
+    console.log(`\nDeleting exchange '${config.EXCHANGE_NAME}'...`);
+    try {
+      await deleteExchange(config.EXCHANGE_NAME);
+      console.log(`✓ Deleted exchange: ${config.EXCHANGE_NAME}`);
+    } catch (err) {
+      console.log(`⚠ Exchange '${config.EXCHANGE_NAME}' not found or already deleted`);
+    }
+
+    // 3. Show remaining queues (if any)
+    console.log('\n--- Remaining queues ---');
     const queues = await getAllQueues();
     
     if (queues.length === 0) {
-      console.log('✓ No queues found. Everything is clean!');
-      process.exit(0);
-    }
-
-    console.log(`Found ${queues.length} queue(s):\n`);
-    
-    for (const queue of queues) {
-      try {
-        // Skip exclusive queues (they're auto-deleted)
-        if (queue.exclusive) {
-          console.log(`⚠ Skipping exclusive queue: ${queue.name} (auto-deleted when connection closes)`);
-          continue;
-        }
-        
-        await deleteQueue(queue.name);
-        console.log(`✓ Deleted queue: ${queue.name}`);
-      } catch (err) {
-        console.log(`✗ Failed to delete queue '${queue.name}': ${err.message}`);
+      console.log('No queues remaining. Everything is clean!');
+    } else {
+      console.log(`Found ${queues.length} other queue(s):`);
+      for (const queue of queues) {
+        console.log(`  - ${queue.name} (${queue.messages || 0} messages)`);
       }
     }
     
-    console.log('\n✅ Cleanup completed!');
+    console.log('\n✅ Cleanup completed!\n');
     process.exit(0);
     
   } catch (error) {
     console.error('❌ Error during cleanup:', error.message);
-    console.error('\nMake sure RabbitMQ Management plugin is enabled and accessible at http://localhost:15672');
+    console.error('\nMake sure RabbitMQ Management plugin is enabled at http://localhost:15672');
     process.exit(1);
   }
 }
