@@ -12,13 +12,8 @@
   "type": "commonjs",
   "dependencies": {
     "amqplib": "^0.10.9",
-<<<<<<< HEAD
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
-=======
-    "jsforce": "^1.10.0",
-    "dotenv": "^16.0.0"
->>>>>>> main
   }
 }
