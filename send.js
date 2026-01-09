@@ -1,6 +1,6 @@
 const amqp = require('amqplib');
 const readline = require('readline');
-const config = require('./config');
+//const config = require('./config');
 
 // Send a message with a routing key and JSON data
 async function sendMessage(routingKey, data) {
