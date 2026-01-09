@@ -4,11 +4,7 @@ const { Server } = require("socket.io");
 const amqp = require('amqplib');
 const path = require('path');
 const cors = require('cors');
-
-// --- CONFIGURATIE ---
-const RABBIT_URL = 'amqp://localhost';
-const QUEUE = 'orders_queue';
-const EXCHANGE = 'orders_exchange';
+const config = require('./config');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,11 +18,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- RABBITMQ HULPFUNCTIE ---
 async function getChannel() {
-    const conn = await amqp.connect(RABBIT_URL);
+    const conn = await amqp.connect(config.RABBITMQ_URL);
     const channel = await conn.createChannel();
-    await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
-    await channel.assertQueue(QUEUE, { durable: true });
-    await channel.bindQueue(QUEUE, EXCHANGE, 'order.*');
+    await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
+    await channel.assertQueue(config.QUEUE_NAME, { durable: true });
+    await channel.bindQueue(config.QUEUE_NAME, config.EXCHANGE_NAME, 'order.*');
     return { conn, channel };
 }
 
@@ -45,7 +41,7 @@ app.post('/api/send', async (req, res) => {
             ts: new Date().toISOString()
         };
 
-        channel.publish(EXCHANGE, 'order.new', Buffer.from(JSON.stringify(msg)), { persistent: true });
+        channel.publish(config.EXCHANGE_NAME, 'order.new', Buffer.from(JSON.stringify(msg)), { persistent: true });
         
         io.emit('log', { source: 'APP', msg: `Order ${orderId} verstuurd naar Queue.` });
         res.json({ status: 'ok' });
@@ -65,7 +61,7 @@ app.post('/api/receive', async (req, res) => {
         const { conn, channel } = await getChannel();
         connection = conn;
 
-        const msg = await channel.get(QUEUE, { noAck: false });
+        const msg = await channel.get(config.QUEUE_NAME, { noAck: false });
         if (msg) {
             const content = JSON.parse(msg.content.toString());
             io.emit('log', { source: 'SAP', msg: `Bericht opgehaald: ${content.data.orderId}` });
@@ -95,7 +91,7 @@ app.post('/api/receive-json', async (req, res) => {
         const { conn, channel } = await getChannel();
         connection = conn;
 
-        const msg = await channel.get(QUEUE, { noAck: false });
+        const msg = await channel.get(config.QUEUE_NAME, { noAck: false });
         if (msg) {
             const content = JSON.parse(msg.content.toString());
             

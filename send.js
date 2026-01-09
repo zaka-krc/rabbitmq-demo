@@ -1,6 +1,6 @@
 // send.js
 const amqp = require('amqplib');
-const config = require('../config');
+const config = require('./config');
 
 // Deze functie blijft hetzelfde als je al had
 async function sendMessage(routingKey, data) {
