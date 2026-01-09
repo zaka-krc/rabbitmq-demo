@@ -33,7 +33,7 @@ async function sendMessage(routingKey, data) {
   console.log("     Data: %s", JSON.stringify(data, null, 2));
   
   setTimeout(() => {
-    connection.close();
+    connection.close(); 
   }, 500);
 }
 
