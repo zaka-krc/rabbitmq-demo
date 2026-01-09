@@ -1,5 +1,5 @@
 const amqp = require('amqplib');
-const sendMessage = require('./send');
+const sendMessage = require('./api/send');
 const config = require('./config');
 const assert = require('assert');
 

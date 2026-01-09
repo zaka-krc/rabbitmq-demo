@@ -1,0 +1,122 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require("socket.io");
+const amqp = require('amqplib');
+const path = require('path');
+const cors = require('cors');
+
+// --- CONFIGURATIE ---
+const RABBIT_URL = 'amqp://localhost';
+const QUEUE = 'orders_queue';
+const EXCHANGE = 'orders_exchange';
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(cors());
+app.use(express.json());
+
+// Serveer de Frontend bestanden uit de 'public' map
+app.use(express.static(path.join(__dirname, 'public')));
+
+// --- RABBITMQ HULPFUNCTIE ---
+async function getChannel() {
+    const conn = await amqp.connect(RABBIT_URL);
+    const channel = await conn.createChannel();
+    await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+    await channel.assertQueue(QUEUE, { durable: true });
+    await channel.bindQueue(QUEUE, EXCHANGE, 'order.*');
+    return { conn, channel };
+}
+
+// --- API 1: SEND (Verstuur Order) ---
+app.post('/api/send', async (req, res) => {
+    console.log("👉 [API] Send aangeroepen");
+    const { orderId, customerName } = req.body;
+
+    let connection;
+    try {
+        const { conn, channel } = await getChannel();
+        connection = conn;
+
+        const msg = {
+            data: { orderId, customerName },
+            ts: new Date().toISOString()
+        };
+
+        channel.publish(EXCHANGE, 'order.new', Buffer.from(JSON.stringify(msg)), { persistent: true });
+        
+        io.emit('log', { source: 'APP', msg: `Order ${orderId} verstuurd naar Queue.` });
+        res.json({ status: 'ok' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (connection) setTimeout(() => connection.close(), 500);
+    }
+});
+
+// --- API 2: RECEIVE SAP (XML output) ---
+app.post('/api/receive', async (req, res) => {
+    console.log("👉 [API] Receive SAP aangeroepen");
+    let connection;
+    try {
+        const { conn, channel } = await getChannel();
+        connection = conn;
+
+        const msg = await channel.get(QUEUE, { noAck: false });
+        if (msg) {
+            const content = JSON.parse(msg.content.toString());
+            io.emit('log', { source: 'SAP', msg: `Bericht opgehaald: ${content.data.orderId}` });
+            
+            const sapXml = `<ORDERS05><BELNR>${content.data.orderId}</BELNR><KUNNR>${content.data.customerName}</KUNNR></ORDERS05>`;
+            io.emit('xml', { xml: sapXml });
+            
+            channel.ack(msg);
+            res.json({ status: 'processed' });
+        } else {
+            io.emit('log', { source: 'INFO', msg: `Queue is leeg.` });
+            res.json({ status: 'empty' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (connection) setTimeout(() => connection.close(), 500);
+    }
+});
+
+// --- API 3: RECEIVE RAW (JSON output) ---
+app.post('/api/receive-json', async (req, res) => {
+    console.log("👉 [API] Receive JSON aangeroepen");
+    let connection;
+    try {
+        const { conn, channel } = await getChannel();
+        connection = conn;
+
+        const msg = await channel.get(QUEUE, { noAck: false });
+        if (msg) {
+            const content = JSON.parse(msg.content.toString());
+            
+            // Stuur de ruwe data naar de frontend
+            io.emit('json-raw', content);
+            io.emit('log', { source: 'DEBUG', msg: `JSON data geïnspecteerd voor ${content.data.orderId}.` });
+            
+            channel.ack(msg);
+            res.json({ status: 'processed' });
+        } else {
+            io.emit('log', { source: 'INFO', msg: `Queue is leeg.` });
+            res.json({ status: 'empty' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (connection) setTimeout(() => connection.close(), 500);
+    }
+});
+
+server.listen(3000, () => {
+    console.log('🚀 Server draait op http://localhost:3000');
+});
