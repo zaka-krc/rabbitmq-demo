@@ -5,6 +5,9 @@ const readline = require('readline');
 =======
 const config = require('./config');
 require('dotenv').config();
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 // Send a message with a routing key and JSON data
