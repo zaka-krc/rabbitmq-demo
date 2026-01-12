@@ -1,14 +1,8 @@
 const amqp = require('amqplib');
 const readline = require('readline');
-<<<<<<< Updated upstream
-//const config = require('./config');
-=======
 const config = require('./config');
 require('dotenv').config();
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+
 
 // Send a message with a routing key and JSON data
 async function sendMessage(routingKey, data) {

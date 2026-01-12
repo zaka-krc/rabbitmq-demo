@@ -1,41 +1,8 @@
-const amqp = require('amqplib/callback_api');
+require('dotenv').config({ path: 'rabbitmq-demo\.github\.env' });
 const jsforce = require('jsforce');
-require('dotenv').config();
 
-// Salesforce verbinding configuratie
-const conn = new jsforce.Connection({
-  loginUrl: 'https://login.salesforce.com' 
-});
 
-const username = process.env.SF_USERNAME || 'guest';
-const password = process.env.SF_PASSWORD || 'guest';
-
-amqp.connect('amqps://iwndpuvk:qzEAZ2AlolLtGK058h8lzPRV259qGHNC@goose.rmq2.cloudamqp.com/iwndpuvk', (error0, connection) => {
-    if (error0) throw error0;
-    connection.createChannel((error1, channel) => {
-        if (error1) throw error1;
-
-        const queue = 'salesforce_orders';
-        channel.assertQueue(queue, { durable: true });
-        channel.prefetch(1);
-
-        console.log(" [*] Wachten op orders voor Salesforce...");
-
-        channel.consume(queue, async (msg) => {
-            const orderData = JSON.parse(msg.content.toString());
-            
-            // Inloggen en order aanmaken in Salesforce
-            conn.login(username, password, function(err, res) {
-                if (err) return console.error(err);
-
-                // Hier maken we een 'Order' of 'Account' aan in Salesforce
-                conn.sobject("Account").create({ Name: orderData.customerName }, function(err, ret) {
-                    if (err || !ret.success) return console.error(err, ret);
-                    
-                    console.log(" [v] Succes! Order opgeslagen in Salesforce met ID: " + ret.id);
-                    channel.ack(msg); // Bevestig aan RabbitMQ dat het gelukt is
-                });
-            });
-        }, { noAck: false });
-    });
-});
+console.log('Test - SALESFORCE_USERNAME:', process.env.SALESFORCE_USERNAME);
+console.log('Test - SALESFORCE_PASSWORD aanwezig?', !!process.env.SALESFORCE_PASSWORD);
+console.log('Test - SALESFORCE_SECURITY_TOKEN aanwezig?', !!process.env.SALESFORCE_SECURITY_TOKEN);
+console.log('Alle env vars:', Object.keys(process.env).filter(k => k.startsWith('SALESFORCE')));
