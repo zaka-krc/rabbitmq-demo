@@ -6,22 +6,26 @@ const config = require('./config');
 async function sendMessage(routingKey, data) {
   const connection = await amqp.connect(config.RABBITMQ_URL);
   const channel = await connection.createChannel();
-  
+
   await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
   await channel.assertQueue(config.QUEUE_NAME, { durable: true });
   await channel.bindQueue(config.QUEUE_NAME, config.EXCHANGE_NAME, 'order.*');
-  
+
+  const { encrypt } = require('./crypto-utils');
+
   const message = {
     type: routingKey,
     timestamp: new Date().toISOString(),
     data: data
   };
-  
+
+  const payload = { encryptedData: encrypt(message) };
+
   // Verstuur bericht
-  channel.publish(config.EXCHANGE_NAME, routingKey, Buffer.from(JSON.stringify(message)), { persistent: true });
-  
+  channel.publish(config.EXCHANGE_NAME, routingKey, Buffer.from(JSON.stringify(payload)), { persistent: true });
+
   console.log(` [x] Sent '${routingKey}':`, data);
-  
+
   // Sluit verbinding na 500ms
   setTimeout(() => {
     connection.close();

@@ -5,18 +5,25 @@ async function startSapConverter() {
   // 1. Verbinding maken met RabbitMQ
   const connection = await amqp.connect(config.RABBITMQ_URL);
   const channel = await connection.createChannel();
-  
+
   // Zorgen dat de wachtrij bestaat
   await channel.assertQueue(config.QUEUE_NAME, { durable: true });
-  
+
   console.log(" 🔄 SAP Converter gestart...");
   console.log(" [*] Wachten op bestellingen in '%s' om te vertalen...", config.QUEUE_NAME);
 
   // 2. Luisteren naar berichten
   channel.consume(config.QUEUE_NAME, (msg) => {
     if (msg !== null) {
+      const { decrypt } = require('./crypto-utils');
+
       // Het bericht komt binnen als ruwe data (Buffer), dus eerst omzetten naar tekst en dan naar JSON object
-      const jsonContent = JSON.parse(msg.content.toString());
+      let jsonContent = JSON.parse(msg.content.toString());
+
+      if (jsonContent.encryptedData) {
+        jsonContent = decrypt(jsonContent.encryptedData);
+      }
+
       const orderData = jsonContent.data; // Hier zit de echte info in (orderId, customerName)
 
       console.log("\n [📥] Nieuw bericht ontvangen (JSON):");
@@ -24,8 +31,8 @@ async function startSapConverter() {
 
       // 3. Hier gebeurt de conversie (Mapping)
       // We pakken de gegevens uit de JSON en stoppen ze in de XML templates
-      
-      const datumVandaag = new Date().toISOString().slice(0,10).replace(/-/g,''); // Maakt bijv. 20260108
+
+      const datumVandaag = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // Maakt bijv. 20260108
 
       const sapXml = `
 <ORDERS05>

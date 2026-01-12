@@ -5,6 +5,7 @@ const amqp = require('amqplib');
 const path = require('path');
 const cors = require('cors');
 const config = require('./config');
+const { encrypt, decrypt } = require('./crypto-utils');
 
 const app = express();
 const server = http.createServer(app);
@@ -41,8 +42,11 @@ app.post('/api/send', async (req, res) => {
             ts: new Date().toISOString()
         };
 
-        channel.publish(config.EXCHANGE_NAME, 'order.new', Buffer.from(JSON.stringify(msg)), { persistent: true });
-        
+        const encryptedMsg = encrypt(msg);
+        const payload = { encryptedData: encryptedMsg };
+
+        channel.publish(config.EXCHANGE_NAME, 'order.new', Buffer.from(JSON.stringify(payload)), { persistent: true });
+
         io.emit('log', { source: 'APP', msg: `Order ${orderId} verstuurd naar Queue.` });
         res.json({ status: 'ok' });
     } catch (err) {
@@ -63,12 +67,18 @@ app.post('/api/receive', async (req, res) => {
 
         const msg = await channel.get(config.QUEUE_NAME, { noAck: false });
         if (msg) {
-            const content = JSON.parse(msg.content.toString());
+            const rawContent = JSON.parse(msg.content.toString());
+            let content = rawContent;
+
+            if (rawContent.encryptedData) {
+                content = decrypt(rawContent.encryptedData);
+            }
+
             io.emit('log', { source: 'SAP', msg: `Bericht opgehaald: ${content.data.orderId}` });
-            
+
             const sapXml = `<ORDERS05><BELNR>${content.data.orderId}</BELNR><KUNNR>${content.data.customerName}</KUNNR></ORDERS05>`;
             io.emit('xml', { xml: sapXml });
-            
+
             channel.ack(msg);
             res.json({ status: 'processed' });
         } else {
@@ -93,12 +103,18 @@ app.post('/api/receive-json', async (req, res) => {
 
         const msg = await channel.get(config.QUEUE_NAME, { noAck: false });
         if (msg) {
-            const content = JSON.parse(msg.content.toString());
-            
+            const rawContent = JSON.parse(msg.content.toString());
+            let content = rawContent;
+
+            if (rawContent.encryptedData) {
+                content = decrypt(rawContent.encryptedData);
+            }
+
             // Stuur de ruwe data naar de frontend
+            // We sturen nu de ontsleutelde data zodat de UI werkt zoals voorheen
             io.emit('json-raw', content);
             io.emit('log', { source: 'DEBUG', msg: `JSON data geïnspecteerd voor ${content.data.orderId}.` });
-            
+
             channel.ack(msg);
             res.json({ status: 'processed' });
         } else {

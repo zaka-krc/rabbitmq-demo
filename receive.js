@@ -1,51 +1,57 @@
 const amqp = require('amqplib');
 const config = require('./config');
 
-// Receive messages from the orders queue
+// Ontvang berichten van de orders wachtrij
 async function startReceiver(onMessageReceived) {
   const connection = await amqp.connect(config.RABBITMQ_URL);
   const channel = await connection.createChannel();
-  
-  // Declare durable exchange (survives broker restart)
+
+  // Declareer durable exchange (overleeft broker restart)
   await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
-  
-  // Declare durable named queue (survives broker restart)
+
+  // Declareer durable named queue (overleeft broker restart)
   await channel.assertQueue(config.QUEUE_NAME, { durable: true });
-  
-  // Bind queue to exchange with routing pattern 'order.*'
+
+  // Verbind queue aan exchange met routing pattern 'order.*'
   await channel.bindQueue(config.QUEUE_NAME, config.EXCHANGE_NAME, 'order.*');
 
   console.log(" [*] Waiting for orders in '%s'... (Press Ctrl+C to exit)", config.QUEUE_NAME);
 
   channel.consume(config.QUEUE_NAME, (msg) => {
     if (msg !== null) {
+      const { decrypt } = require('./crypto-utils');
+
       const routingKey = msg.fields.routingKey;
-      const messageData = JSON.parse(msg.content.toString());
-      
+      let messageData = JSON.parse(msg.content.toString());
+
+      if (messageData.encryptedData) {
+        messageData = decrypt(messageData.encryptedData);
+      }
+
       console.log("\n [x] Received order:");
       console.log("     Routing key: %s", routingKey);
       console.log("     Order ID: %s", messageData.data.orderId);
       console.log("     Customer: %s", messageData.data.customerName);
       console.log("     Timestamp: %s", messageData.timestamp);
-      
-      // If a callback exists (like from our Test), run it!
+
+      // Als er een callback is (zoals van onze Test), voer deze uit!
       if (onMessageReceived) {
         onMessageReceived(messageData, routingKey);
       }
-      
-      // Acknowledge the message (tells RabbitMQ we processed it)
+
+      // Bevestig het bericht (vertelt RabbitMQ dat we het verwerkt hebben)
       channel.ack(msg);
     }
   }, { noAck: false });
-  
+
   return { connection, channel };
 }
 
-// If running directly, start listening
+// Indien direct uitgevoerd, start luisteren
 if (require.main === module) {
   console.log("Starting order receiver...");
   let connection;
-  
+
   startReceiver()
     .then(result => {
       connection = result.connection;
@@ -56,7 +62,7 @@ if (require.main === module) {
       process.exit(1);
     });
 
-  // Gracefully close the connection on exit
+  // Sluit de verbinding netjes bij afsluiten
   process.on('SIGINT', () => {
     console.log("\nClosing RabbitMQ connection...");
     if (connection) {
