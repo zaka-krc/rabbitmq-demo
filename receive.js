@@ -1,5 +1,6 @@
 const amqp = require('amqplib/callback_api');
 const jsforce = require('jsforce');
+require('dotenv').config();
 
 // Salesforce verbinding configuratie
 const conn = new jsforce.Connection({
@@ -9,7 +10,7 @@ const conn = new jsforce.Connection({
 const username = process.env.SF_USERNAME || 'guest';
 const password = process.env.SF_PASSWORD || 'guest';
 
-amqp.connect('amqp://localhost', (error0, connection) => {
+amqp.connect('amqps://iwndpuvk:qzEAZ2AlolLtGK058h8lzPRV259qGHNC@goose.rmq2.cloudamqp.com/iwndpuvk', (error0, connection) => {
     if (error0) throw error0;
     connection.createChannel((error1, channel) => {
         if (error1) throw error1;
