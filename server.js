@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- RABBITMQ HULPFUNCTIE ---
 async function getChannel() {
-    const conn = await amqp.connect(config.RABBITMQ_URL);
+    const conn = await amqp.connect(config.RABBITMQ_URL, config.RABBITMQ_OPTIONS);
     const channel = await conn.createChannel();
     await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
     await channel.assertQueue(config.QUEUE_NAME, { durable: true });

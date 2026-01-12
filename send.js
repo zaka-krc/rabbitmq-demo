@@ -4,7 +4,7 @@ const config = require('./config');
 
 // Deze functie blijft hetzelfde als je al had
 async function sendMessage(routingKey, data) {
-  const connection = await amqp.connect(config.RABBITMQ_URL);
+  const connection = await amqp.connect(config.RABBITMQ_URL, config.RABBITMQ_OPTIONS);
   const channel = await connection.createChannel();
 
   await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });

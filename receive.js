@@ -3,7 +3,7 @@ const config = require('./config');
 
 // Ontvang berichten van de orders wachtrij
 async function startReceiver(onMessageReceived) {
-  const connection = await amqp.connect(config.RABBITMQ_URL);
+  const connection = await amqp.connect(config.RABBITMQ_URL, config.RABBITMQ_OPTIONS);
   const channel = await connection.createChannel();
 
   // Declareer durable exchange (overleeft broker restart)

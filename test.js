@@ -13,7 +13,7 @@ async function runTest() {
 
   try {
     // 1. Verbind en zet queue op (hetzelfde als receive.js doet)
-    connection = await amqp.connect(config.RABBITMQ_URL);
+    connection = await amqp.connect(config.RABBITMQ_URL, config.RABBITMQ_OPTIONS);
     channel = await connection.createChannel();
 
     await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });

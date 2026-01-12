@@ -3,7 +3,7 @@ const config = require('./config');
 
 async function startSapConverter() {
   // 1. Verbinding maken met RabbitMQ
-  const connection = await amqp.connect(config.RABBITMQ_URL);
+  const connection = await amqp.connect(config.RABBITMQ_URL, config.RABBITMQ_OPTIONS);
   const channel = await connection.createChannel();
 
   // Zorgen dat de wachtrij bestaat
