@@ -1,32 +1,44 @@
-import 'dotenv/config';
-import amqp from 'amqplib';
+// send_bridge_test.js
+const amqp = require('amqplib');
+const config = require('./config');
+const { encrypt } = require('./crypto-utils');
 
-async function sendTestMessage() {
+async function sendTest() {
     try {
-        const connection = await amqp.connect(process.env.RABBITMQ_URL);
+        const connection = await amqp.connect(config.RABBITMQ_URL);
         const channel = await connection.createChannel();
-        const queue = 'salesforce_queue';
 
-        // Dit is de data die we naar Salesforce willen sturen
-        const message = {
-            firstName: "Zak",
-            lastName: "Tester",
-            company: "RabbitMQ Demo BV",
-            email: "test@example.com"
+        console.log("Sending encrypted test message...");
+
+        const testOrder = {
+            orderId: `SF-TEST-${Math.floor(Math.random() * 1000)}`,
+            customerName: "Elon Musk"
         };
 
-        await channel.assertQueue(queue, { durable: true });
-        channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)));
+        const message = {
+            type: 'order.create',
+            timestamp: new Date().toISOString(),
+            data: testOrder
+        };
 
-        console.log("🚀 Bericht verzonden naar de wachtrij:", message);
+        // Encrypt de data zoals de bridge verwacht
+        const payload = { encryptedData: encrypt(message) };
+
+        await channel.assertExchange(config.EXCHANGE_NAME, 'topic', { durable: true });
+        
+        // Publish naar de exchange (niet direct naar de queue!)
+        channel.publish(config.EXCHANGE_NAME, 'order.create', Buffer.from(JSON.stringify(payload)));
+
+        console.log("✅ Sent:", testOrder);
 
         setTimeout(() => {
             connection.close();
             process.exit(0);
         }, 500);
+
     } catch (err) {
-        console.error("❌ Fout bij verzenden:", err);
+        console.error(err);
     }
 }
 
-sendTestMessage();
+sendTest();
