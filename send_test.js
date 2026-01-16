@@ -9,7 +9,7 @@ async function sendTestMessage() {
 
         // Dit is de data die we naar Salesforce willen sturen
         const message = {
-            firstName: "Rabbit",
+            firstName: "dalil",
             lastName: "Tester",
             company: "RabbitMQ Demo BV",
             email: "test@example.com"
